@@ -31,22 +31,25 @@ export class News extends Component {
   }
 
   async updateNews() {
-    this.props.setProgress(10);
-    this.setState({ loading: true });
-    const url = `https://newsapi.org/v2/top-headlines?country=${this.props.country}&category=${this.props.category}&apiKey=2540c236e51d43cbbcdb2cce350f0472&page=${this.state.page}&pageSize=${this.props.pageSize}`;
-    let data = await fetch(url);
-    this.props.setProgress(30);
+    try {
+      this.props.setProgress(10);
+      this.setState({ loading: true });
+      const url = `https://newsapi.org/v2/top-headlines?country=${this.props.country}&category=${this.props.category}&apiKey=2540c236e51d43cbbcdb2cce350f0472&page=${this.state.page}&pageSize=${this.props.pageSize}`;
+      let data = await fetch(url);
+      this.props.setProgress(30);
+      let parsedData = await data.json();
+      this.props.setProgress(70);
 
-    let parsedData = await data.json();
-    this.props.setProgress(50);
-
-
-    this.setState({
-      articles: parsedData.articles,
-      totalResults: parsedData.totalResults,
-      loading: false,
-    });
-     this.props.setProgress(100);
+      this.setState({
+        articles: Array.isArray(parsedData.articles) ? parsedData.articles : [],
+        totalResults: parsedData.totalResults || 0,
+        loading: false,
+      });
+      this.props.setProgress(100);
+    } catch (error) {
+      console.error("Error fetching news:", error);
+      this.setState({ loading: false, articles: [] });
+    }
   }
 
   async componentDidMount() {
@@ -62,16 +65,20 @@ export class News extends Component {
   }
 
   fetchMoreData = async () => {
-    this.setState({ page: this.state.page + 1 }, async () => {
-      const url = `https://newsapi.org/v2/top-headlines?country=${this.props.country}&category=${this.props.category}&apiKey=2540c236e51d43cbbcdb2cce350f0472&page=${this.state.page}&pageSize=${this.props.pageSize}`;
-      let data = await fetch(url);
-      let parsedData = await data.json();
+    try {
+      this.setState({ page: this.state.page + 1 }, async () => {
+        const url = `https://newsapi.org/v2/top-headlines?country=${this.props.country}&category=${this.props.category}&apiKey=2540c236e51d43cbbcdb2cce350f0472&page=${this.state.page}&pageSize=${this.props.pageSize}`;
+        let data = await fetch(url);
+        let parsedData = await data.json();
 
-      this.setState({
-        articles: this.state.articles.concat(parsedData.articles),
-        totalResults: parsedData.totalResults
+        this.setState({
+          articles: this.state.articles.concat(Array.isArray(parsedData.articles) ? parsedData.articles : []),
+          totalResults: parsedData.totalResults || this.state.totalResults
+        });
       });
-    });
+    } catch (error) {
+      console.error("Error fetching more data:", error);
+    }
   };
 
   render() {
@@ -82,7 +89,7 @@ export class News extends Component {
         </h1>
 
         <InfiniteScroll
-          dataLength={this.state.articles.length}
+          dataLength={this.state.articles ? this.state.articles.length : 0}
           next={this.fetchMoreData}
           hasMore={this.state.articles.length !== this.state.totalResults}
           loader={<Spinner />}
@@ -105,7 +112,7 @@ export class News extends Component {
                       newsUrl={element.url}
                       author={element.author}
                       date={element.publishedAt}
-                      source={element.source.name}
+                      source={element.source?.name || "Unknown"}
                     />
                   </div>
                 ))}
