@@ -9,13 +9,13 @@ export class News extends Component {
     country: 'us',
     pageSize: 8,
     category: 'general'
-  }
+  };
 
   static propTypes = {
     country: PropTypes.string,
     pageSize: PropTypes.number,
     category: PropTypes.string,
-  }
+  };
 
   capitalizeFirstLetter = (string) => string.charAt(0).toUpperCase() + string.slice(1);
 
@@ -25,30 +25,40 @@ export class News extends Component {
       articles: [],
       loading: true,
       page: 1,
-      totalResults: 0
+      totalResults: 0,
+      error: false
     };
     document.title = `${this.capitalizeFirstLetter(this.props.category)} - NewsMonkey`;
   }
 
   async updateNews() {
+    this.props.setProgress(10);
+    this.setState({ loading: true, error: false });
+
     try {
-      this.props.setProgress(10);
-      this.setState({ loading: true });
       const url = `https://newsapi.org/v2/top-headlines?country=${this.props.country}&category=${this.props.category}&apiKey=2540c236e51d43cbbcdb2cce350f0472&page=${this.state.page}&pageSize=${this.props.pageSize}`;
       let data = await fetch(url);
-      this.props.setProgress(30);
-      let parsedData = await data.json();
-      this.props.setProgress(70);
 
-      this.setState({
-        articles: Array.isArray(parsedData.articles) ? parsedData.articles : [],
-        totalResults: parsedData.totalResults || 0,
-        loading: false,
-      });
+      if (!data.ok) throw new Error("Network response was not ok");
+      this.props.setProgress(40);
+
+      let parsedData = await data.json();
+
+      if (!parsedData.articles || parsedData.articles.length === 0) {
+        this.setState({ articles: [], totalResults: 0, loading: false });
+      } else {
+        this.setState({
+          articles: parsedData.articles,
+          totalResults: parsedData.totalResults,
+          loading: false,
+        });
+      }
+
       this.props.setProgress(100);
     } catch (error) {
       console.error("Error fetching news:", error);
-      this.setState({ loading: false, articles: [] });
+      this.setState({ loading: false, error: true });
+      this.props.setProgress(100);
     }
   }
 
@@ -66,18 +76,18 @@ export class News extends Component {
 
   fetchMoreData = async () => {
     try {
-      this.setState({ page: this.state.page + 1 }, async () => {
-        const url = `https://newsapi.org/v2/top-headlines?country=${this.props.country}&category=${this.props.category}&apiKey=2540c236e51d43cbbcdb2cce350f0472&page=${this.state.page}&pageSize=${this.props.pageSize}`;
-        let data = await fetch(url);
-        let parsedData = await data.json();
+      const nextPage = this.state.page + 1;
+      const url = `https://newsapi.org/v2/top-headlines?country=${this.props.country}&category=${this.props.category}&apiKey=2540c236e51d43cbbcdb2cce350f0472&page=${nextPage}&pageSize=${this.props.pageSize}`;
+      let data = await fetch(url);
+      let parsedData = await data.json();
 
-        this.setState({
-          articles: this.state.articles.concat(Array.isArray(parsedData.articles) ? parsedData.articles : []),
-          totalResults: parsedData.totalResults || this.state.totalResults
-        });
+      this.setState({
+        articles: this.state.articles.concat(parsedData.articles || []),
+        totalResults: parsedData.totalResults || this.state.totalResults,
+        page: nextPage,
       });
     } catch (error) {
-      console.error("Error fetching more data:", error);
+      console.error("Error loading more news:", error);
     }
   };
 
@@ -88,15 +98,19 @@ export class News extends Component {
           NewsMonkey - Top {this.capitalizeFirstLetter(this.props.category)} Headlines
         </h1>
 
+        {this.state.error && (
+          <h3 className="text-center text-danger">Error loading news. Please try again later.</h3>
+        )}
+
         <InfiniteScroll
           dataLength={this.state.articles ? this.state.articles.length : 0}
           next={this.fetchMoreData}
-          hasMore={this.state.articles.length !== this.state.totalResults}
+          hasMore={this.state.articles.length < this.state.totalResults}
           loader={<Spinner />}
         >
           <div className="container">
             {this.state.loading && <Spinner />}
-            {!this.state.loading && this.state.articles.length === 0 && (
+            {!this.state.loading && this.state.articles.length === 0 && !this.state.error && (
               <h3 className="text-center">No news found</h3>
             )}
 
